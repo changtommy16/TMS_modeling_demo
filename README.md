@@ -1,6 +1,6 @@
-# Fitting Wendling Neural Mass Model to Resting-State EEG
+# TMS Modeling Demo: Wendling Neural Mass Model for Resting-State EEG
 
-> **Estimating cortical excitation-inhibition balance from scalp EEG using evolutionary optimization**
+> **A practice project for fitting a biophysical neural mass model to EEG and exploring pre/post TMS parameter changes.**
 
 [![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)](https://python.org)
 [![neurolib](https://img.shields.io/badge/neurolib-0.6+-blue)](https://github.com/neurolib-dev/neurolib)
@@ -10,29 +10,35 @@
 
 ## Overview
 
-This project fits the **Wendling neural mass model**, a biophysical model of cortical column dynamics, to **empirical resting-state EEG** recordings. By matching simulated power spectral density (PSD) to real EEG spectra via evolutionary optimization, we extract physiologically interpretable parameters that quantify excitatory-inhibitory (E/I) balance in the brain.
+This repository is a public demo of an exploratory modeling workflow. It fits the **Wendling neural mass model**, a biophysical cortical-column model, to **resting-state EEG** by matching simulated and empirical power spectral density (PSD). The goal is to practice an end-to-end modeling pipeline: EEG preprocessing, spectral feature extraction, parameter optimization, validation plots, and presentation-ready reporting.
 
-We apply this pipeline to two subjects (**Healthy Control** vs **Epilepsy Patient**) across three occipital EEG channels (O1, O2, POz), and further examine how model parameters change **before and after TMS treatment** in the patient. The results reveal consistent neurophysiological signatures: reduced slow inhibition (B down 51%) and elevated fast inhibition (G up 99%) in the patient relative to the healthy control, plus a dramatic recovery of slow inhibition (B up 240-343%) following TMS.
+The original local project also explored pre/post TMS data under two protocol-style conditions:
 
-This public showcase contains the presentation-ready code, figures, and documentation. Raw EEG recordings are intentionally excluded.
+- **Continuous TMS**, treated here as the inhibitory-like protocol label.
+- **Intermittent TMS**, treated here as the excitatory-like protocol label.
+
+The TMS results in this repo should be read as a **method demo**, not as clinical evidence. In the local analysis notes, the TMS fitting quality was flagged as weak: SpecParam/FOOOF targets fell back to default values, alpha peak constraints were unreliable, and the optimizer relied mostly on PSD shape. The parameter changes are therefore useful for demonstrating the workflow, but not for claiming a reliable treatment effect.
+
+Raw EEG recordings are intentionally excluded from this public repository.
 
 ---
 
 ## Model Architecture
 
-The Wendling model describes a cortical column with **four interacting neural populations**: pyramidal cells, excitatory interneurons, slow inhibitory (GABA_B) interneurons, and fast inhibitory (GABA_A) interneurons.
+The Wendling model describes a cortical column with **four interacting neural populations**: pyramidal cells, excitatory interneurons, slow inhibitory interneurons, and fast inhibitory interneurons. The schematic below was drawn specifically for this demo so the repository does not reuse a paper figure.
 
 <p align="center">
-  <img src="docs/images/wendling_architecture.png" alt="Wendling Model Architecture" width="700">
+  <img src="docs/images/wendling_architecture.png" alt="Original Wendling model structure schematic" width="760">
 </p>
 
 **Key parameters:**
+
 | Symbol | Description | Role |
 |--------|-------------|------|
-| **A** | Excitatory synaptic gain (AMPA) | Amplifies excitatory PSPs |
-| **B** | Slow inhibitory gain (GABA_B) | Controls slow inhibition strength |
-| **G** | Fast inhibitory gain (GABA_A) | Controls fast inhibition strength |
-| **a, b, g** | Membrane time constants | Shape of PSP waveforms |
+| **A** | Excitatory synaptic gain | Amplifies excitatory PSPs |
+| **B** | Slow inhibitory gain | Controls slow inhibition strength |
+| **G** | Fast inhibitory gain | Controls fast inhibition strength |
+| **a, b, g** | Synaptic time constants | Shape the PSP waveforms |
 
 ---
 
@@ -43,26 +49,28 @@ The Wendling model describes a cortical column with **four interacting neural po
 </p>
 
 **Steps:**
-1. **EEG preprocessing** -> Extract resting-state data from O1, O2, POz channels
-2. **Feature extraction** -> Compute log-PSD (1-45 Hz) + SpecParam features (alpha peak, 1/f exponent)
-3. **Evolutionary optimization** -> Search Wendling parameter space (50 generations x 50 individuals) to minimize a multi-objective loss:
+
+1. **EEG preprocessing** -> Extract resting-state data from O1, O2, and POz channels.
+2. **Feature extraction** -> Compute log-PSD and spectral features.
+3. **Evolutionary optimization** -> Search the Wendling parameter space to minimize a weighted objective.
+4. **Validation** -> Re-run the best parameters and compare simulated vs empirical PSD, spectral features, and time series.
 
 ```text
 L_total = 0.7 x L_PSD  +  0.3 x L_SpecParam
 
-where  L_PSD       = Weighted MSE on log-PSD (1-45 Hz)
-       L_SpecParam = MSE on alpha peak frequency, height, bandwidth, 1/f exponent
+where  L_PSD       = weighted MSE on log-PSD
+       L_SpecParam = MSE on alpha peak frequency, height, bandwidth, and 1/f exponent
 ```
-
-4. **Validation** -> Re-run best parameters, compare simulated vs empirical PSD, SpecParam features, and time series
 
 ---
 
-## Results: Healthy Control vs Epilepsy Patient
+## Healthy Control vs Epilepsy Patient
+
+These plots show an initial subject-comparison exercise across occipital channels. They are included as a modeling demonstration and should be interpreted cautiously because the dataset is small.
 
 ### Validation Plots
 
-Each validation panel shows: log-PSD comparison, SpecParam fit (empirical and simulated), de-meaned PSD overlay, optimized parameters, pointwise error, and time series comparison.
+Each validation panel shows log-PSD comparison, SpecParam fit, de-meaned PSD overlay, optimized parameters, pointwise error, and time-series comparison.
 
 #### O1 Channel
 
@@ -84,66 +92,52 @@ Each validation panel shows: log-PSD comparison, SpecParam fit (empirical and si
 
 ### Parameter Comparison
 
-| Parameter | O1 Diff | O2 Diff | POz Diff | Avg Diff | Trend |
-|-----------|---------|---------|----------|----------|:-----:|
-| **A** (excitatory gain) | -6.8% | -35.1% | +12.3% | -9.9% | Down |
-| **B** (slow inhibitory gain) | **-78.8%** | **-42.1%** | **-33.2%** | **-51.4%** | Down |
-| **G** (fast inhibitory gain) | **+34.2%** | **+106.8%** | **+157.1%** | **+99.4%** | Up |
-| **a** (excitatory time const) | -8.1% | +3.7% | +34.1% | +9.9% | Up |
-| **b** (slow inhib time const) | +33.9% | +20.0% | -10.6% | +14.4% | Up |
-| **g** (fast inhib time const) | -34.2% | -2.2% | -0.4% | -12.2% | Down |
+| Parameter | O1 Diff | O2 Diff | POz Diff | Avg Diff | Direction |
+|-----------|---------|---------|----------|----------|:---------:|
+| **A** | -6.8% | -35.1% | +12.3% | -9.9% | mixed |
+| **B** | **-78.8%** | **-42.1%** | **-33.2%** | **-51.4%** | lower |
+| **G** | **+34.2%** | **+106.8%** | **+157.1%** | **+99.4%** | higher |
+| **a** | -8.1% | +3.7% | +34.1% | +9.9% | mixed |
+| **b** | +33.9% | +20.0% | -10.6% | +14.4% | mixed |
+| **g** | -34.2% | -2.2% | -0.4% | -12.2% | lower |
 
-> *Differences are computed as (Patient - Healthy) / Healthy x 100%*
+> Differences are computed as `(Patient - Healthy) / Healthy x 100%`.
 
 <p align="center">
   <img src="docs/images/parameter_heatmap.png" alt="Parameter Difference Heatmap" width="700">
 </p>
 
-### Key Finding
-
-The patient consistently shows:
-- **B down 51%** - Reduced slow (GABA_B) inhibition across all channels
-- **G up 99%** - Elevated fast (GABA_A) inhibition, possibly a compensatory mechanism
-
-This aligns with the **impaired GABAergic dendritic inhibition** hypothesis in epilepsy (Wendling et al., 2002).
-
 ---
 
-## Results: Pre vs Post-TMS (Patient)
+## Exploratory TMS Practice Analysis
 
-After transcranial magnetic stimulation (TMS), the patient's Wendling model parameters shift dramatically, most notably a recovery of slow inhibition.
+The local analysis included two pre/post TMS protocol folders. I keep both in this public demo instead of choosing one as the "correct" result.
 
-<p align="center">
-  <img src="docs/images/tms_bar_comparison.png" alt="Pre vs Post-TMS Parameter Comparison" width="700">
-</p>
+### Continuous TMS
 
-<p align="center">
-  <img src="docs/images/tms_heatmap.png" alt="TMS Parameter Change Heatmap" width="600">
-</p>
+The continuous protocol showed inconsistent parameter movement across O1 and O2. For example, B decreased strongly in O1 but increased in O2. This is a useful warning sign for a demo because similar losses can still produce non-unique parameter solutions.
 
-### TMS-Induced Parameter Changes
+| Fitted Parameters | Percentage Changes |
+|:-:|:-:|
+| ![Continuous TMS parameters](docs/images/tms_continuous_parameters.png) | ![Continuous TMS percentage changes](docs/images/tms_continuous_percentage_changes.png) |
 
-| Parameter | O1 Change | O2 Change | POz Change | Interpretation |
-|-----------|-----------|-----------|------------|----------------|
-| **B** | **+241%** | **+318%** | **+344%** | Massive recovery of slow inhibition |
-| **G** | -55% | -20% | +52% | Variable fast inhibition response |
-| **b** | +11% | -53% | -48% | Altered slow inhibitory dynamics |
-| **g** | +61% | +38% | -17% | Altered fast inhibitory dynamics |
+### Intermittent TMS
 
-### Key Finding
+The intermittent protocol also showed unstable or channel-dependent parameter changes, including a large G increase in O2 and a much smaller change in O1.
 
-**B parameter increases 240-344% after TMS** across all channels, suggesting that TMS may restore slow inhibitory (GABA_B) function. This is consistent with the hypothesis that TMS modulates cortical inhibition in epilepsy.
+| Fitted Parameters | Percentage Changes |
+|:-:|:-:|
+| ![Intermittent TMS parameters](docs/images/tms_intermittent_parameters.png) | ![Intermittent TMS percentage changes](docs/images/tms_intermittent_percentage_changes.png) |
 
----
+### Reliability Caveat
 
-## Summary of Findings
+These TMS outputs are not strong enough to support a biological conclusion. The original local report flagged three main issues:
 
-| Comparison | Key Result | Interpretation |
-|------------|------------|----------------|
-| Patient vs Healthy | B down 51%, G up 99% | Impaired slow inhibition + compensatory fast inhibition |
-| Post-TMS vs Pre-TMS | B up 240-344% | TMS restores slow inhibitory function |
+- SpecParam/FOOOF fitting failed for the TMS runs, so peak-frequency targets were mostly defaults.
+- Several parameters moved in opposite directions across O1/O2 or changed by very different magnitudes.
+- The optimization may be under-constrained because different parameter combinations can produce similar PSDs.
 
-These results demonstrate that **computational modeling of EEG can quantify excitation-inhibition imbalance** and track treatment effects at the circuit level.
+For this reason, the TMS section is best described as **workflow practice**: it demonstrates how a pre/post modeling comparison can be organized, while also showing why fit quality, convergence, and parameter identifiability need to be checked before interpretation.
 
 ---
 
@@ -151,10 +145,10 @@ These results demonstrate that **computational modeling of EEG can quantify exci
 
 | Component | Tool |
 |-----------|------|
-| **Neural mass model** | [neurolib](https://github.com/neurolib-dev/neurolib) (Wendling model) |
-| **Optimization** | Evolutionary algorithm (DEAP via neurolib) |
+| **Neural mass model** | [neurolib](https://github.com/neurolib-dev/neurolib) with a Wendling extension |
+| **Optimization** | Evolutionary / multi-objective parameter search |
 | **EEG processing** | MNE-Python |
-| **Spectral analysis** | SciPy (Welch PSD), SpecParam/FOOOF |
+| **Spectral analysis** | SciPy Welch PSD, SpecParam/FOOOF |
 | **Visualization** | Matplotlib |
 | **Language** | Python 3.9+ |
 
@@ -163,48 +157,46 @@ These results demonstrate that **computational modeling of EEG can quantify exci
 ## How to Reproduce
 
 ### Prerequisites
+
 - Python 3.9+
-- [neurolib](https://github.com/neurolib-dev/neurolib) with the custom Wendling extension: [neurolib-wendling](https://github.com/changtommy16/neurolib-wendling)
+- [neurolib](https://github.com/neurolib-dev/neurolib)
+- The custom Wendling model extension: [neurolib-wendling](https://github.com/changtommy16/neurolib-wendling)
 
 ### Installation
 
 ```bash
-# Clone this repo
-git clone https://github.com/changtommy16/wendling-eeg-fitting.git
+git clone https://github.com/changtommy16/TMS_modeling_demo.git
+cd TMS_modeling_demo
 
-# Install dependencies
 pip install neurolib mne scipy numpy matplotlib specparam
-
-# Install the Wendling model extension
 pip install -e path/to/neurolib-wendling
 ```
 
-### Running the Pipeline
+### Minimal Model Run
 
 ```python
 from neurolib_wendling.models.wendling import WendlingModel
 import numpy as np
 
-# 1. Set up single-node model
 model = WendlingModel(
-    Cmat=np.array([[0]]), Dmat=np.array([[0]]),
-    heterogeneity=0, random_init=False, seed=42
+    Cmat=np.array([[0]]),
+    Dmat=np.array([[0]]),
+    heterogeneity=0,
+    random_init=False,
+    seed=42,
 )
 
-# 2. Configure parameters
-model.params['B'] = 10.0    # Slow inhibitory gain
-model.params['G'] = 15.0    # Fast inhibitory gain
-model.params['A'] = 5.0     # Excitatory gain
-model.params['duration'] = 60000  # 60 seconds
+model.params["A"] = 5.0
+model.params["B"] = 10.0
+model.params["G"] = 15.0
+model.params["duration"] = 60000
 
-# 3. Run simulation
 model.run()
 
-# 4. Extract output signal (pyramidal cell PSP)
-v_pyr = model.y1[0,:] - model.y2[0,:] - model.y3[0,:]
+v_pyr = model.y1[0, :] - model.y2[0, :] - model.y3[0, :]
 ```
 
-For full optimization pipeline details, see the [neurolib-wendling](https://github.com/changtommy16/neurolib-wendling) repository. Exact raw-data reruns require the local EEG files, which are not included in this public showcase.
+Exact raw-data reruns require local EEG files, which are not included in this public demo.
 
 ---
 
@@ -224,4 +216,4 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 
 ## Related Repositories
 
-- [**neurolib-wendling**](https://github.com/changtommy16/neurolib-wendling) - Custom Wendling neural mass model extension for neurolib (model code + demo)
+- [**neurolib-wendling**](https://github.com/changtommy16/neurolib-wendling) - Custom Wendling neural mass model extension for neurolib.
